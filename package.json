@@ -1,0 +1,9 @@
+{
+  "name": "issuedock",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A local-first task board for independent open-source maintainers.",
+  "license": "MIT",
+  "scripts": { "test": "node --test tests/core.test.cjs", "test:browser": "node tests/browser-smoke.cjs" },
+  "engines": { "node": ">=20" }
+}
