@@ -1,0 +1,63 @@
+name: 缺陷报告
+description: 报告可复现的功能、数据或无障碍问题
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请先移除截图、备份和描述中的个人或敏感信息。
+        安全问题请通过 Security 页面私下报告，不要填写此表单。
+  - type: input
+    id: version
+    attributes:
+      label: 版本或提交
+      description: 填写版本号、提交 SHA 或访问的部署地址。
+      placeholder: 1.0.0 / e880eb0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 浏览器与操作系统
+      placeholder: Chrome 142 / Windows 11
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请提供最小、可重复的操作步骤。
+      placeholder: |
+        1. 打开应用
+        2. 添加任务
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充信息
+      description: 可提供已脱敏截图、控制台错误或数据规模。
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交确认
+      options:
+        - label: 我已移除敏感信息，并搜索过现有 Issue。
+          required: true

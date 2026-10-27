@@ -5,10 +5,17 @@
   const $ = id => document.getElementById(id);
   const dialog = $('task-dialog');
   const form = $('task-form');
+  const storageStatus = $('storage-status');
+  const storageStatusText = $('storage-status-text');
   let tasks = [];
   let editing = null;
   let noticeTimer;
   let storageBlocked = false;
+  function setStorageState(blocked) {
+    storageBlocked = blocked;
+    storageStatus.dataset.state = blocked ? 'blocked' : 'ready';
+    storageStatusText.textContent = blocked ? '保存已暂停' : '数据保存在此浏览器';
+  }
   function notice(message, error = false) {
     clearTimeout(noticeTimer);
     const box = $('notice');
@@ -20,8 +27,9 @@
   try {
     const saved = localStorage.getItem(KEY);
     if (saved !== null) tasks = core.parseBackup(saved);
+    setStorageState(false);
   } catch {
-    storageBlocked = true;
+    setStorageState(true);
     notice('无法读取已存数据。为避免覆盖，保存已暂停。请先备份原有浏览器数据，或通过“恢复备份”导入有效备份。', true);
   }
   function commit(next, recovering = false) {
@@ -30,7 +38,7 @@
       const serialized = core.backup(next);
       localStorage.setItem(KEY, serialized);
       tasks = core.parseBackup(serialized);
-      storageBlocked = false;
+      setStorageState(false);
       render();
       return true;
     } catch (error) { notice(`未保存：${error.message}`, true); return false; }
@@ -47,8 +55,15 @@
     button.addEventListener('click', handler);
     return button;
   }
+  function focusTask(id, selector) {
+    requestAnimationFrame(() => {
+      const taskCard = [...document.querySelectorAll('.card')].find(item => item.dataset.taskId === id);
+      (taskCard?.querySelector(selector) || $('add-task')).focus();
+    });
+  }
   function card(task) {
     const article = element('article', 'card');
+    article.dataset.taskId = task.id;
     const meta = element('div', 'card-meta');
     meta.append(element('span', 'project-label', task.project || '未分类'), element('span', `priority ${task.priority}`, `${core.PRIORITIES[task.priority]}优先级`));
     article.append(meta, element('h3', '', task.title));
@@ -59,13 +74,19 @@
     for (const [value, label] of Object.entries(core.STATUSES)) select.add(new Option(label, value));
     select.value = task.status;
     select.addEventListener('change', () => {
-      if (commit(tasks.map(item => item.id === task.id ? { ...item, status: select.value } : item))) notice('任务状态已更新');
+      if (commit(tasks.map(item => item.id === task.id ? { ...item, status: select.value } : item))) {
+        notice('任务状态已更新');
+        focusTask(task.id, 'select');
+      }
       else select.value = task.status;
     });
     const buttons = element('div', 'card-tools');
-    buttons.append(action('编辑', () => openForm(task)), action('删除', () => {
+    buttons.append(action('编辑', () => openForm(task), 'edit'), action('删除', () => {
       if (window.confirm(`删除任务“${task.title}”？此操作无法撤销。`)) {
-        if (commit(tasks.filter(item => item.id !== task.id))) notice('任务已删除');
+        if (commit(tasks.filter(item => item.id !== task.id))) {
+          notice('任务已删除');
+          $('add-task').focus();
+        }
       }
     }, 'delete'));
     bottom.append(select, buttons);
@@ -124,12 +145,17 @@
     data.title = data.title.trim();
     if (!data.title) { $('task-title').setCustomValidity('请输入任务标题'); $('task-title').reportValidity(); return; }
     let next;
+    let savedId = editing;
     if (editing) next = tasks.map(task => task.id === editing ? { ...task, ...data } : task);
     else {
-      const id = globalThis.crypto?.randomUUID?.() || `task-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      next = [{ ...data, id, createdAt: new Date().toISOString() }, ...tasks];
+      savedId = globalThis.crypto?.randomUUID?.() || `task-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      next = [{ ...data, id: savedId, createdAt: new Date().toISOString() }, ...tasks];
     }
-    if (commit(next)) { dialog.close(); notice(editing ? '任务已更新' : '任务已添加'); }
+    if (commit(next)) {
+      dialog.close();
+      notice(editing ? '任务已更新' : '任务已添加');
+      focusTask(savedId, '.card-tools .edit');
+    }
   });
   $('task-title').addEventListener('input', () => $('task-title').setCustomValidity(''));
   $('add-task').addEventListener('click', () => { $('task-title').setCustomValidity(''); openForm(); });
@@ -180,10 +206,14 @@
     try {
       const saved = localStorage.getItem(KEY);
       tasks = saved === null ? [] : core.parseBackup(saved);
-      storageBlocked = false; render();
+      setStorageState(false);
+      render();
       if (dialog.open) { dialog.close(); notice('其他页面更新了数据，编辑窗口已关闭，请重新编辑。'); }
       else notice('已同步此浏览器其他页面的变更');
-    } catch { storageBlocked = true; notice('其他页面的数据无效，保存已暂停。', true); }
+    } catch {
+      setStorageState(true);
+      notice('其他页面的数据无效，保存已暂停。', true);
+    }
   });
   render();
 })();

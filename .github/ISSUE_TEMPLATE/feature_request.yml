@@ -1,0 +1,54 @@
+name: 功能建议
+description: 描述一个具体的用户问题或改进方向
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        IssueDock 优先保持离线、简单和零依赖。请先描述问题，而不是只提交实现方案。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 要解决的问题
+      description: 谁在什么场景下遇到了什么困难？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+      description: 描述期望行为、交互和数据变化。
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 考虑过的替代方案
+    validations:
+      required: false
+  - type: dropdown
+    id: offline
+    attributes:
+      label: 该功能能否继续离线工作？
+      options:
+        - 可以
+        - 不可以，需要讨论
+        - 不确定
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 兼容性与范围
+      description: 是否影响备份格式、隐私、无障碍或现有工作流？
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交确认
+      options:
+        - label: 我已搜索现有 Issue，并确认这不是重复建议。
+          required: true

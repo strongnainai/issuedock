@@ -45,6 +45,14 @@ async function ready() {
   }
   throw new Error('App did not become ready');
 }
+async function waitFor(expression, message) {
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    if (await evaluate(expression)) return;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  throw new Error(message);
+}
 async function main() {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   proc = spawn(browser, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--remote-debugging-pipe', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], windowsHide: true });
@@ -67,16 +75,33 @@ async function main() {
   await send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` }, session);
   await ready();
   assert.equal(await evaluate("document.getElementById('total-count').textContent"), '0');
+  assert.equal(await evaluate("document.getElementById('storage-status-text').textContent"), '数据保存在此浏览器');
+  assert.ok(await evaluate("performance.getEntriesByType('resource').every(entry => new URL(entry.name).origin === location.origin)"), 'app must not load external resources');
+  assert.ok(await evaluate("[...document.querySelectorAll('input:not([type=hidden]):not([hidden]), select, textarea')].every(element => element.labels.length > 0 || element.getAttribute('aria-label'))"), 'every form control needs an accessible name');
+  assert.equal(await evaluate("document.getElementById('task-dialog').getAttribute('aria-labelledby')"), 'dialog-title');
+  await evaluate("document.getElementById('add-task').click()");
+  assert.ok(await evaluate("document.getElementById('task-dialog').open"));
+  await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 }, session);
+  await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 }, session);
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert.ok(!(await evaluate("document.getElementById('task-dialog').open")), 'Escape closes the task dialog');
   await evaluate("document.getElementById('load-demo').click()");
   assert.equal(await evaluate("document.querySelectorAll('.card').length"), 4);
   const hostile = '<img src=x onerror=alert(1)>';
   await evaluate(`document.getElementById('add-task').click(); document.getElementById('task-title').value=${JSON.stringify(hostile)}; document.getElementById('task-project').value='Integration'; document.getElementById('task-form').requestSubmit()`);
   assert.equal(await evaluate("document.querySelectorAll('.card').length"), 5);
   assert.equal(await evaluate("document.querySelectorAll('.card img').length"), 0);
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert.ok(await evaluate("document.activeElement.classList.contains('edit')"), 'focus returns to the saved task');
   await evaluate("document.querySelector('.card-tools button').click(); document.getElementById('task-title').value='Edited task'; document.getElementById('task-form').requestSubmit()");
   assert.equal(await evaluate("document.querySelector('.card h3').textContent"), 'Edited task');
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert.ok(await evaluate("document.activeElement.classList.contains('edit')"), 'focus returns after editing');
   await evaluate("const status=document.querySelector('.card-bottom select'); status.value='done'; status.dispatchEvent(new Event('change'))");
   assert.equal(await evaluate("document.getElementById('done-count').textContent"), '2');
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert.equal(await evaluate("document.activeElement.tagName"), 'SELECT', 'status control keeps focus after rerender');
+  assert.ok(await evaluate("document.activeElement.closest('.card').dataset.taskId"), 'focused status control belongs to the edited task');
   await evaluate("document.getElementById('search').value='Edited'; document.getElementById('search').dispatchEvent(new Event('input'))");
   assert.equal(await evaluate("document.querySelectorAll('.card').length"), 1);
   await evaluate("document.getElementById('reset-filters').click()");
@@ -96,14 +121,30 @@ async function main() {
   await evaluate("document.getElementById('load-demo').click()");
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true }, session);
   assert.ok(await evaluate('document.documentElement.scrollWidth <= 390'), 'mobile page must not overflow horizontally');
+  await send('Emulation.setDeviceMetricsOverride', { width: 320, height: 568, deviceScaleFactor: 1, mobile: true }, session);
+  assert.ok(await evaluate('document.documentElement.scrollWidth <= 320'), 'narrow mobile page must not overflow horizontally');
+  await evaluate("document.getElementById('add-task').click()");
+  assert.ok(await evaluate("(() => { const box=document.getElementById('task-dialog').getBoundingClientRect(); return box.top >= 0 && box.left >= 0 && box.right <= innerWidth && box.bottom <= innerHeight; })()"), 'dialog must fit the narrow viewport');
+  await evaluate("document.getElementById('task-dialog').close()");
   await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 1000, deviceScaleFactor: 1, mobile: false }, session);
   await evaluate('document.fonts.ready');
   await evaluate("document.getElementById('notice').hidden=true");
+  await evaluate('document.activeElement.blur()');
   const screenshot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true }, session);
   fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
   fs.writeFileSync(path.join(root, 'docs', 'screenshot.png'), Buffer.from(screenshot.data, 'base64'));
+  // A malformed store must block writes, then a valid backup must be able to recover it.
+  await evaluate("localStorage.setItem('issuedock.tasks.v1', '{broken')");
+  await send('Page.reload', {}, session);
+  await ready();
+  assert.equal(await evaluate("document.getElementById('total-count').textContent"), '0');
+  assert.equal(await evaluate("document.getElementById('storage-status-text').textContent"), '保存已暂停');
+  assert.equal(await evaluate("document.getElementById('storage-status').dataset.state"), 'blocked');
+  await evaluate(`window.confirm=()=>true; const valid=window.IssueDockCore.backup([{id:'recovered',title:'恢复后的任务',project:'',description:'',status:'backlog',priority:'medium',createdAt:'2026-10-27T00:00:00.000Z'}]); const transfer=new DataTransfer(); transfer.items.add(new File([valid],'recover.json',{type:'application/json'})); const input=document.getElementById('import-file'); input.files=transfer.files; input.dispatchEvent(new Event('change'));`);
+  await waitFor("document.getElementById('total-count').textContent === '1'", 'valid backup did not recover blocked storage');
+  assert.equal(await evaluate("document.getElementById('storage-status-text').textContent"), '数据保存在此浏览器');
   assert.deepEqual(errors, [], 'no uncaught browser exceptions');
-  console.log('Browser smoke passed: create, edit, move, search, reload, restore, delete, text safety and mobile layout.');
+  console.log('Browser smoke passed: CRUD, keyboard, focus, accessibility, text safety, storage recovery and responsive layout.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {
   if (proc && proc.exitCode === null) {

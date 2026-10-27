@@ -2,8 +2,27 @@
   "name": "issuedock",
   "version": "1.0.0",
   "private": true,
-  "description": "A local-first task board for independent open-source maintainers.",
+  "description": "A zero-dependency, local-first task board with JSON backup and Markdown export.",
   "license": "MIT",
-  "scripts": { "test": "node --test tests/core.test.cjs", "test:browser": "node tests/browser-smoke.cjs" },
-  "engines": { "node": ">=20" }
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/strongnainai/issuedock.git"
+  },
+  "bugs": {
+    "url": "https://github.com/strongnainai/issuedock/issues"
+  },
+  "homepage": "https://github.com/strongnainai/issuedock#readme",
+  "keywords": [
+    "task-board",
+    "kanban",
+    "local-first",
+    "offline",
+    "open-source-maintenance"
+  ],
+  "scripts": {
+    "test": "node --check core.js && node --check app.js && node --test tests/core.test.cjs",
+    "test:browser": "node --check tests/browser-smoke.cjs && node tests/browser-smoke.cjs",
+    "test:all": "npm test && npm run test:browser"
+  },
+  "engines": { "node": ">=22" }
 }

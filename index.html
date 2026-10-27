@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="IssueDock：离线项目任务看板，在自己的浏览器中整理维护工作。">
+  <meta name="description" content="IssueDock 是一个无需账号、无网络请求的离线任务看板，用 JSON 备份和 Markdown 导出整理维护工作。">
   <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f6f7f2">
   <title>IssueDock · 把维护工作理清楚</title>
   <link rel="stylesheet" href="styles.css">
   <script defer src="core.js"></script>
@@ -14,7 +15,7 @@
   <a class="skip-link" href="#board">跳到任务看板</a>
   <header class="topbar">
     <a class="brand" href="./" aria-label="IssueDock 首页"><span class="brand-icon" aria-hidden="true">▥</span>IssueDock<span class="tag">LOCAL FIRST</span></a>
-    <span class="storage-note"><span aria-hidden="true">●</span> 数据保存在此浏览器</span>
+    <span class="storage-note" id="storage-status" data-state="ready" role="status" aria-live="polite"><span class="storage-dot" aria-hidden="true">●</span><span id="storage-status-text">数据保存在此浏览器</span></span>
   </header>
   <main>
     <section class="intro" aria-labelledby="page-title">
@@ -28,7 +29,7 @@
     </section>
     <section class="workspace" aria-label="项目任务">
       <div class="toolbar">
-        <label class="search"><span aria-hidden="true">⌕</span><span class="sr-only">搜索标题、项目和描述</span><input id="search" type="search" placeholder="搜索标题、项目或描述…" maxlength="300"></label>
+        <label class="search"><span aria-hidden="true">⌕</span><span class="sr-only">搜索标题、项目和描述</span><input id="search" type="search" placeholder="搜索标题、项目或描述…" maxlength="300" aria-controls="board"></label>
         <label class="sr-only" for="project-filter">筛选项目</label><select id="project-filter"><option value="">全部项目</option></select>
         <label class="sr-only" for="priority-filter">筛选优先级</label><select id="priority-filter"><option value="">全部优先级</option><option value="high">高优先级</option><option value="medium">中优先级</option><option value="low">低优先级</option></select>
         <button id="reset-filters" type="button" class="text-button">重置筛选</button>
@@ -37,7 +38,7 @@
       <div id="board" class="board" tabindex="-1"></div>
     </section>
     <footer><p>你的工作，你来掌握。<span>无需账号 · 无网络请求 · MIT 开源</span></p><div class="footer-actions"><button id="load-demo" type="button">添加示例</button><button id="export-json" type="button">备份 JSON</button><button id="import-json" type="button">恢复备份</button><button id="export-md" type="button">导出 Markdown</button></div></footer>
-    <p class="backup-note">浏览器清理数据或隐私模式可能导致任务丢失，请定期备份。不同浏览器与设备之间不会自动同步。</p>
+    <p class="backup-note" id="backup-note">浏览器清理数据或隐私模式可能导致任务丢失，请定期备份。不同浏览器与设备之间不会自动同步。</p>
   </main>
   <input id="import-file" type="file" accept=".json,application/json" hidden>
   <dialog id="task-dialog" aria-labelledby="dialog-title">
@@ -50,7 +51,7 @@
       <div class="dialog-actions"><button id="cancel-task" type="button">取消</button><button type="submit" class="primary">保存任务</button></div>
     </form>
   </dialog>
-  <div id="notice" role="status" aria-live="polite" hidden></div>
+  <div id="notice" role="status" aria-live="polite" aria-atomic="true" hidden></div>
   <noscript><p class="noscript">IssueDock 需要启用 JavaScript 才能保存和管理任务。</p></noscript>
 </body>
 </html>
