@@ -67,7 +67,9 @@ async function waitFor(expression, message) {
 }
 async function main() {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  proc = spawn(browser, ['--headless', '--disable-gpu', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check', '--remote-debugging-pipe', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'], windowsHide: true });
+  const browserArgs = ['--headless', '--disable-gpu', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check', '--remote-debugging-pipe', `--user-data-dir=${profile}`, 'about:blank'];
+  if (process.env.BROWSER_NO_SANDBOX === '1') browserArgs.unshift('--no-sandbox');
+  proc = spawn(browser, browserArgs, { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'], windowsHide: true });
   proc.stderr.on('data', chunk => { browserStderr = (browserStderr + chunk.toString()).slice(-8000); });
   proc.once('exit', (code, signal) => { browserExit = `browser exited: code=${code}, signal=${signal || 'none'}`; });
   proc.on('error', error => rejectPending(error));
