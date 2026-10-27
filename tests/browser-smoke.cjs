@@ -24,10 +24,15 @@ let serial = 0;
 const pending = new Map();
 let errors = [];
 let session;
+let browserStderr = '';
+let browserExit = '';
 function send(method, params = {}, sessionId) {
   const id = ++serial;
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { pending.delete(id); reject(new Error(`CDP timeout: ${method}`)); }, 12000);
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error(`CDP timeout: ${method}${browserExit ? ` (${browserExit})` : ''}`));
+    }, 12000);
     pending.set(id, { resolve, reject, timer });
     proc.stdio[3].write(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }) + '\0');
   });
@@ -55,7 +60,9 @@ async function waitFor(expression, message) {
 }
 async function main() {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  proc = spawn(browser, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--remote-debugging-pipe', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], windowsHide: true });
+  proc = spawn(browser, ['--headless=new', '--disable-gpu', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check', '--remote-debugging-pipe', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'], windowsHide: true });
+  proc.stderr.on('data', chunk => { browserStderr = (browserStderr + chunk.toString()).slice(-8000); });
+  proc.once('exit', (code, signal) => { browserExit = `browser exited: code=${code}, signal=${signal || 'none'}`; });
   let buffer = '';
   proc.stdio[4].on('data', chunk => {
     buffer += chunk.toString();
@@ -146,7 +153,15 @@ async function main() {
   assert.deepEqual(errors, [], 'no uncaught browser exceptions');
   console.log('Browser smoke passed: CRUD, keyboard, focus, accessibility, text safety, storage recovery and responsive layout.');
 }
-main().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {
+main().catch(error => {
+  const details = [error?.stack || String(error), `Browser: ${browser}`, browserExit, browserStderr].filter(Boolean).join(' | ');
+  console.error(details);
+  if (process.env.GITHUB_ACTIONS) {
+    const annotation = details.replace(/\s+/g, ' ').slice(0, 6000).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+    console.error(`::error file=tests/browser-smoke.cjs,line=1,title=Browser smoke failed::${annotation}`);
+  }
+  process.exitCode = 1;
+}).finally(async () => {
   if (proc && proc.exitCode === null) {
     await send('Browser.close').catch(() => proc.kill());
     if (proc.exitCode === null) await new Promise(resolve => { const timer = setTimeout(() => { proc.kill(); resolve(); }, 3000); proc.once('exit', () => { clearTimeout(timer); resolve(); }); });
