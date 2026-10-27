@@ -26,6 +26,13 @@ let errors = [];
 let session;
 let browserStderr = '';
 let browserExit = '';
+function rejectPending(error) {
+  for (const request of pending.values()) {
+    clearTimeout(request.timer);
+    request.reject(error);
+  }
+  pending.clear();
+}
 function send(method, params = {}, sessionId) {
   const id = ++serial;
   return new Promise((resolve, reject) => {
@@ -60,9 +67,12 @@ async function waitFor(expression, message) {
 }
 async function main() {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  proc = spawn(browser, ['--headless=new', '--disable-gpu', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check', '--remote-debugging-pipe', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'], windowsHide: true });
+  proc = spawn(browser, ['--headless', '--disable-gpu', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check', '--remote-debugging-pipe', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'], windowsHide: true });
   proc.stderr.on('data', chunk => { browserStderr = (browserStderr + chunk.toString()).slice(-8000); });
   proc.once('exit', (code, signal) => { browserExit = `browser exited: code=${code}, signal=${signal || 'none'}`; });
+  proc.on('error', error => rejectPending(error));
+  proc.stdio[3].on('error', error => rejectPending(error));
+  proc.stdio[4].on('error', error => rejectPending(error));
   let buffer = '';
   proc.stdio[4].on('data', chunk => {
     buffer += chunk.toString();
@@ -153,7 +163,8 @@ async function main() {
   assert.deepEqual(errors, [], 'no uncaught browser exceptions');
   console.log('Browser smoke passed: CRUD, keyboard, focus, accessibility, text safety, storage recovery and responsive layout.');
 }
-main().catch(error => {
+main().catch(async error => {
+  await new Promise(resolve => setTimeout(resolve, 200));
   const details = [error?.stack || String(error), `Browser: ${browser}`, browserExit, browserStderr].filter(Boolean).join(' | ');
   console.error(details);
   if (process.env.GITHUB_ACTIONS) {
